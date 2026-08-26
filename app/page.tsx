@@ -14,21 +14,91 @@ export default function Home() {
     { nome: "", cognome: "" }
   ]);
 
-  function aggiorna(index: number, campo: keyof Person, valore: string) {
+  const [loading, setLoading] = useState(false);
+  const [errore, setErrore] = useState("");
+
+  function aggiorna(
+    index: number,
+    campo: keyof Person,
+    valore: string
+  ) {
     setPersone(
       persone.map((persona, i) =>
-        i === index ? { ...persona, [campo]: valore } : persona
+        i === index
+          ? { ...persona, [campo]: valore }
+          : persona
       )
     );
   }
 
   function aggiungi() {
-    setPersone([...persone, { nome: "", cognome: "" }]);
+    if (persone.length >= 20) return;
+
+    setPersone([
+      ...persone,
+      { nome: "", cognome: "" }
+    ]);
   }
 
   function rimuovi(index: number) {
     if (persone.length === 1) return;
-    setPersone(persone.filter((_, i) => i !== index));
+
+    setPersone(
+      persone.filter((_, i) => i !== index)
+    );
+  }
+
+  async function paga() {
+    setErrore("");
+
+    const clean = persone.map((persona) => ({
+      nome: persona.nome.trim(),
+      cognome: persona.cognome.trim()
+    }));
+
+    if (
+      clean.some(
+        (persona) =>
+          !persona.nome || !persona.cognome
+      )
+    ) {
+      setErrore(
+        "Inserisci nome e cognome di tutti i partecipanti."
+      );
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          people: clean
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Errore nel pagamento."
+        );
+      }
+
+      window.location.href = data.url;
+    } catch (error) {
+      setErrore(
+        error instanceof Error
+          ? error.message
+          : "Errore nel pagamento."
+      );
+
+      setLoading(false);
+    }
   }
 
   return (
@@ -49,13 +119,25 @@ export default function Home() {
             <input
               placeholder="Nome"
               value={persona.nome}
-              onChange={(e) => aggiorna(index, "nome", e.target.value)}
+              onChange={(e) =>
+                aggiorna(
+                  index,
+                  "nome",
+                  e.target.value
+                )
+              }
             />
 
             <input
               placeholder="Cognome"
               value={persona.cognome}
-              onChange={(e) => aggiorna(index, "cognome", e.target.value)}
+              onChange={(e) =>
+                aggiorna(
+                  index,
+                  "cognome",
+                  e.target.value
+                )
+              }
             />
 
             <button
@@ -68,29 +150,55 @@ export default function Home() {
           </div>
         ))}
 
-        <button className="secondary" type="button" onClick={aggiungi}>
+        <button
+          className="secondary"
+          type="button"
+          onClick={aggiungi}
+        >
           + Aggiungi persona
         </button>
 
         <div className="total">
           <div>
             <div>
-              {persone.length} {persone.length === 1 ? "ingresso" : "ingressi"}
+              {persone.length}{" "}
+              {persone.length === 1
+                ? "ingresso"
+                : "ingressi"}
             </div>
-            <div className="small">{PREZZO} € a persona</div>
+
+            <div className="small">
+              {PREZZO} € a persona
+            </div>
           </div>
 
-          <strong>{persone.length * PREZZO} €</strong>
+          <strong>
+            {persone.length * PREZZO} €
+          </strong>
         </div>
+
+        {errore && (
+          <p style={{ color: "#ff9999" }}>
+            {errore}
+          </p>
+        )}
 
         <button
           className="pay"
-          onClick={() =>
-            alert("Pagamento Stripe: lo colleghiamo nel prossimo passaggio.")
-          }
+          onClick={paga}
+          disabled={loading}
         >
-          Continua al pagamento
+          {loading
+            ? "Apertura pagamento..."
+            : "Continua al pagamento"}
         </button>
+
+        <p className="small" style={{
+          textAlign: "center",
+          marginTop: "14px"
+        }}>
+          Pagamento sicuro tramite Stripe
+        </p>
       </div>
     </main>
   );
