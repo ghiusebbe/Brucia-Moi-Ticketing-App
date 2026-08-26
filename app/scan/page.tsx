@@ -1,17 +1,10 @@
 "use client";
 
-import {
-  useRef,
-  useState
-} from "react";
-
-import {
-  Html5Qrcode
-} from "html5-qrcode";
+import { useRef, useState } from "react";
+import { Html5Qrcode } from "html5-qrcode";
 
 type TicketData = {
   valid: boolean;
-
   ticket: {
     id: string;
     nome: string;
@@ -21,179 +14,221 @@ type TicketData = {
   };
 };
 
+type BannerState =
+  | {
+      type: "valid";
+      title: string;
+      subtitle: string;
+    }
+  | {
+      type: "used";
+      title: string;
+      subtitle: string;
+    }
+  | {
+      type: "error";
+      title: string;
+      subtitle: string;
+    }
+  | null;
+
 export default function ScanPage() {
-  const [password, setPassword] =
-    useState("");
+  const [password, setPassword] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [banner, setBanner] = useState<BannerState>(null);
 
-  const [token, setToken] =
-    useState("");
+  const scanner = useRef<Html5Qrcode | null>(null);
+  const processing = useRef(false);
+  const lastToken = useRef("");
+  const lastScanAt = useRef(0);
+  const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [data, setData] =
-    useState<TicketData | null>(null);
-
-  const [message, setMessage] =
-    useState("");
-
-  const [scanning, setScanning] =
-    useState(false);
-
-  const scanner =
-    useRef<Html5Qrcode | null>(null);
-
-  function extractToken(
-    value: string
-  ) {
+  function extractToken(value: string) {
     try {
       const url = new URL(value);
-
-      return (
-        url.searchParams.get("token") ||
-        value
-      );
+      return url.searchParams.get("token") || value;
     } catch {
       return value;
     }
   }
 
-  async function verify(
-    qrToken: string
-  ) {
-    const response = await fetch(
-      `/api/checkin?token=${encodeURIComponent(
-        qrToken
-      )}`,
+  function showBanner(value: BannerState) {
+    if (bannerTimer.current) {
+      clearTimeout(bannerTimer.current);
+    }
+
+    setBanner(value);
+
+    bannerTimer.current = setTimeout(() => {
+      setBanner(null);
+    }, 2600);
+  }
+
+  async function verifyAndCheckIn(token: string) {
+    const verifyResponse = await fetch(
+      `/api/checkin?token=${encodeURIComponent(token)}`,
       {
         headers: {
-          "x-staff-password":
-            password
+          "x-staff-password": password
         }
       }
     );
 
-    const result =
-      await response.json();
+    const verifyData = await verifyResponse.json();
 
-    if (!response.ok) {
-      setData(null);
-
-      setMessage(
-        result.error ||
-          "Biglietto non valido."
-      );
+    if (!verifyResponse.ok) {
+      showBanner({
+        type: "error",
+        title: "QR NON VALIDO",
+        subtitle: verifyData.error || "Biglietto non trovato"
+      });
 
       return;
     }
 
-    setToken(qrToken);
-    setData(result);
-    setMessage("");
+    const data = verifyData as TicketData;
+
+    if (data.ticket.checkedIn) {
+      showBanner({
+        type: "used",
+        title: "GIÀ UTILIZZATO",
+        subtitle: `${data.ticket.nome} ${data.ticket.cognome}`
+      });
+
+      return;
+    }
+
+    const checkinResponse = await fetch("/api/checkin", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-staff-password": password
+      },
+      body: JSON.stringify({
+        token
+      })
+    });
+
+    const checkinData = await checkinResponse.json();
+
+    if (!checkinResponse.ok) {
+      if (checkinResponse.status === 409) {
+        showBanner({
+          type: "used",
+          title: "GIÀ UTILIZZATO",
+          subtitle: `${data.ticket.nome} ${data.ticket.cognome}`
+        });
+
+        return;
+      }
+
+      showBanner({
+        type: "error",
+        title: "ERRORE CHECK-IN",
+        subtitle: checkinData.error || "Riprova"
+      });
+
+      return;
+    }
+
+    showBanner({
+      type: "valid",
+      title: "INGRESSO OK",
+      subtitle: `${data.ticket.nome} ${data.ticket.cognome}`
+    });
   }
 
   async function startScanner() {
     if (!password) {
-      setMessage(
-        "Inserisci la password staff."
-      );
+      showBanner({
+        type: "error",
+        title: "PASSWORD MANCANTE",
+        subtitle: "Inserisci la password staff"
+      });
 
       return;
     }
 
-    setData(null);
-    setMessage("");
+    if (scanner.current) {
+      return;
+    }
 
-    const instance =
-      new Html5Qrcode("reader");
-
-    scanner.current =
-      instance;
+    const instance = new Html5Qrcode("reader");
+    scanner.current = instance;
 
     try {
       await instance.start(
         {
-          facingMode:
-            "environment"
+          facingMode: "environment"
         },
-
         {
-          fps: 10,
-
+          fps: 12,
           qrbox: {
-            width: 240,
-            height: 240
+            width: 250,
+            height: 250
           }
         },
+        async (decodedText) => {
+          const token = extractToken(decodedText);
+          const now = Date.now();
 
-        async (
-          decodedText
-        ) => {
-          const qrToken =
-            extractToken(
-              decodedText
-            );
+          // Evita letture duplicate dello stesso QR mentre
+          // il telefono è ancora puntato sul codice.
+          if (
+            token === lastToken.current &&
+            now - lastScanAt.current < 3500
+          ) {
+            return;
+          }
 
-          await instance.stop();
+          if (processing.current) {
+            return;
+          }
 
-          setScanning(false);
+          processing.current = true;
+          lastToken.current = token;
+          lastScanAt.current = now;
 
-          await verify(qrToken);
+          try {
+            await verifyAndCheckIn(token);
+          } finally {
+            // Lo scanner NON viene fermato.
+            // Dopo un breve intervallo può leggere il QR successivo.
+            setTimeout(() => {
+              processing.current = false;
+            }, 900);
+          }
         },
-
         () => {}
       );
 
       setScanning(true);
-    } catch {
-      setMessage(
-        "Impossibile aprire la fotocamera."
-      );
+    } catch (error) {
+      console.error(error);
+
+      scanner.current = null;
+
+      showBanner({
+        type: "error",
+        title: "FOTOCAMERA NON DISPONIBILE",
+        subtitle: "Controlla i permessi del browser"
+      });
     }
   }
 
-  async function checkIn() {
-    const response =
-      await fetch(
-        "/api/checkin",
-        {
-          method: "POST",
+  async function stopScanner() {
+    if (!scanner.current) return;
 
-          headers: {
-            "Content-Type":
-              "application/json",
+    try {
+      await scanner.current.stop();
+    } catch {}
 
-            "x-staff-password":
-              password
-          },
+    try {
+      await scanner.current.clear();
+    } catch {}
 
-          body:
-            JSON.stringify({
-              token
-            })
-        }
-      );
-
-    const result =
-      await response.json();
-
-    if (!response.ok) {
-      setMessage(
-        result.error ||
-          "Errore check-in."
-      );
-
-      await verify(token);
-
-      return;
-    }
-
-    await verify(token);
-  }
-
-  async function another() {
-    setData(null);
-    setToken("");
-    setMessage("");
-
-    await startScanner();
+    scanner.current = null;
+    setScanning(false);
   }
 
   return (
@@ -208,154 +243,106 @@ export default function ScanPage() {
         Brucia Moi Staff
       </p>
 
-      <div className="card">
-        <input
-          type="password"
-          placeholder="Password staff"
-          value={password}
-          onChange={(e) =>
-            setPassword(
-              e.target.value
-            )
-          }
-        />
+      {!scanning && (
+        <div className="card">
+          <input
+            type="password"
+            placeholder="Password staff"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
 
+          <button
+            className="pay"
+            style={{
+              marginTop: "12px"
+            }}
+            onClick={startScanner}
+          >
+            Apri scanner QR
+          </button>
+        </div>
+      )}
+
+      {scanning && (
         <button
-          className="pay"
+          className="secondary"
           style={{
-            marginTop: "12px"
+            width: "100%",
+            marginBottom: "12px"
           }}
-          onClick={
-            startScanner
-          }
-          disabled={
-            scanning
-          }
+          onClick={stopScanner}
         >
-          {scanning
-            ? "Scanner attivo..."
-            : "Apri scanner QR"}
+          Ferma scanner
         </button>
-      </div>
+      )}
 
       <div
         id="reader"
         style={{
           width: "100%",
-          marginTop: "18px",
-          borderRadius: "18px",
-          overflow: "hidden"
+          overflow: "hidden",
+          borderRadius: "18px"
         }}
       />
 
-      {message && (
+      {banner && (
         <div
-          className="card"
           style={{
-            marginTop: "18px",
-            color: "#ff9999"
+            marginTop: "12px",
+            borderRadius: "14px",
+            padding: "12px 14px",
+            border: "1px solid #333",
+            background:
+              banner.type === "valid"
+                ? "#102519"
+                : banner.type === "used"
+                ? "#291919"
+                : "#2b2114"
           }}
         >
-          {message}
-        </div>
-      )}
-
-      {data && (
-        <div
-          className="card"
-          style={{
-            marginTop: "18px"
-          }}
-        >
-          {data.ticket
-            .checkedIn ? (
-            <>
-              <div
-                style={{
-                  color:
-                    "#ff8888",
-                  fontSize:
-                    "30px",
-                  fontWeight:
-                    900
-                }}
-              >
-                ✕ GIÀ
-                UTILIZZATO
-              </div>
-
-              <p className="small">
-                {data.ticket
-                  .checkedInAt
-                  ? new Date(
-                      data.ticket
-                        .checkedInAt
-                    ).toLocaleString(
-                      "it-IT"
-                    )
-                  : ""}
-              </p>
-            </>
-          ) : (
-            <div
-              style={{
-                color:
-                  "#92ffaa",
-                fontSize:
-                  "30px",
-                fontWeight:
-                  900
-              }}
-            >
-              ✓ VALIDO
-            </div>
-          )}
+          <div
+            style={{
+              fontSize: "16px",
+              fontWeight: 900,
+              color:
+                banner.type === "valid"
+                  ? "#92ffaa"
+                  : banner.type === "used"
+                  ? "#ff9696"
+                  : "#ffd28a"
+            }}
+          >
+            {banner.type === "valid"
+              ? "✓ "
+              : banner.type === "used"
+              ? "✕ "
+              : "⚠ "}
+            {banner.title}
+          </div>
 
           <div
             style={{
-              margin:
-                "26px 0",
-              fontSize:
-                "25px",
-              fontWeight:
-                900
+              marginTop: "3px",
+              color: "#bbb",
+              fontSize: "13px"
             }}
           >
-            {data.ticket.nome}{" "}
-            {
-              data.ticket
-                .cognome
-            }
+            {banner.subtitle}
           </div>
-
-          {!data.ticket
-            .checkedIn && (
-            <button
-              className="pay"
-              onClick={
-                checkIn
-              }
-            >
-              ✓ CONFERMA
-              INGRESSO
-            </button>
-          )}
-
-          <button
-            className="secondary"
-            style={{
-              width: "100%",
-              marginTop:
-                "10px"
-            }}
-            onClick={
-              another
-            }
-          >
-            Scansiona
-            prossimo
-          </button>
         </div>
+      )}
+
+      {scanning && (
+        <p
+          className="small"
+          style={{
+            textAlign: "center",
+            marginTop: "12px"
+          }}
+        >
+          Scanner attivo — inquadra il prossimo QR
+        </p>
       )}
     </main>
   );
