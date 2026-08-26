@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useEffect, useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import html2canvas from "html2canvas";
 
@@ -40,6 +40,8 @@ export default function SuccessPage() {
   const [emailError, setEmailError] =
     useState("");
 
+  const automaticEmailSent = useRef(false);
+
   useEffect(() => {
     const sessionId =
       new URLSearchParams(
@@ -76,7 +78,7 @@ export default function SuccessPage() {
   }, []);
 
   async function sendTicketsByEmail() {
-    if (!data) return;
+    if (!data || sendingEmail) return;
 
     setSendingEmail(true);
     setEmailError("");
@@ -162,6 +164,23 @@ export default function SuccessPage() {
     );
   }
 
+
+  useEffect(() => {
+    if (
+      !data ||
+      !data.order?.id ||
+      !data.order?.email ||
+      !data.tickets?.length ||
+      automaticEmailSent.current
+    ) {
+      return;
+    }
+
+    automaticEmailSent.current = true;
+
+    void sendTicketsByEmail();
+  }, [data]);
+
   if (!data) {
     return (
       <main>
@@ -199,7 +218,7 @@ export default function SuccessPage() {
 
         <div className="email-ticket-copy">
           <strong>
-            Ricevi tutti i biglietti via email
+            Biglietti via email
           </strong>
 
           <span>
@@ -214,16 +233,13 @@ export default function SuccessPage() {
               : "email-ticket-button"
           }
           onClick={sendTicketsByEmail}
-          disabled={
-            sendingEmail ||
-            emailSent
-          }
+          disabled={sendingEmail}
         >
           {emailSent
             ? "✓ Inviati"
             : sendingEmail
             ? "Invio..."
-            : "Invia"}
+            : "Reinvia"}
         </button>
       </section>
 
