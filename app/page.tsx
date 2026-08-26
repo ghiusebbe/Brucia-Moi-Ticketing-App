@@ -17,6 +17,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [errore, setErrore] = useState("");
   const [email, setEmail] = useState("");
+  const [email, setEmail] = useState("");
 
   function aggiorna(
     index: number,

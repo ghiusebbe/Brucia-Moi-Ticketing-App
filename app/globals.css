@@ -1063,3 +1063,129 @@ button:disabled {
     width: 100%;
   }
 }
+
+/* EMAIL TICKETS */
+
+.checkout-email {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.checkout-email label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.checkout-email .small {
+  margin: 8px 2px 0;
+}
+
+.email-ticket-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  align-items: center;
+  gap: 13px;
+
+  margin-bottom: 26px;
+  padding: 14px;
+
+  border: 1px solid rgba(255,209,102,.16);
+  border-radius: 18px;
+
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      rgba(255,95,143,.12),
+      transparent 45%
+    ),
+    rgba(255,255,255,.035);
+}
+
+.email-ticket-icon {
+  display: grid;
+  place-items: center;
+
+  width: 44px;
+  height: 44px;
+
+  border-radius: 14px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255,209,102,.18),
+      rgba(255,95,143,.17)
+    );
+
+  font-size: 19px;
+}
+
+.email-ticket-copy {
+  min-width: 0;
+}
+
+.email-ticket-copy strong {
+  display: block;
+  font-size: 14px;
+}
+
+.email-ticket-copy span {
+  display: block;
+
+  margin-top: 4px;
+
+  overflow: hidden;
+
+  color: var(--muted);
+  font-size: 12px;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.email-ticket-button {
+  min-height: 40px;
+  padding: 0 14px;
+
+  color: #17070e;
+
+  background:
+    linear-gradient(
+      90deg,
+      #ffd166,
+      #ff8752
+    );
+}
+
+.email-ticket-button.sent {
+  color: var(--success);
+
+  border: 1px solid rgba(142,240,165,.18);
+
+  background:
+    rgba(72,168,92,.15);
+}
+
+.email-ticket-error {
+  margin: -15px 0 24px;
+
+  color: var(--danger);
+
+  font-size: 13px;
+}
+
+@media (max-width: 450px) {
+  .email-ticket-panel {
+    grid-template-columns:
+      auto minmax(0,1fr);
+  }
+
+  .email-ticket-button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}

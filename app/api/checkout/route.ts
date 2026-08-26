@@ -10,6 +10,9 @@ export async function POST(request: Request) {
     const email = String(body.email || "")
       .trim()
       .toLowerCase();
+    const email = String(body.email || "")
+      .trim()
+      .toLowerCase();
 
     if (!Array.isArray(people) || people.length < 1 || people.length > 20) {
       return NextResponse.json(
@@ -54,6 +57,7 @@ export async function POST(request: Request) {
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
+      customer_email: email,
       customer_email: email,
 
       line_items: [
