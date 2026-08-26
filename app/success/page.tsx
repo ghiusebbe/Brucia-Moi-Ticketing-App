@@ -157,37 +157,19 @@ export default function SuccessPage() {
             >
               <div
                 id={`ticket-${ticket.id}`}
-                className="card"
+                className="ticket-card"
               >
-                <div
-                  style={{
-                    fontSize: "34px",
-                    lineHeight: ".9",
-                    fontWeight: 900,
-                    letterSpacing: "-0.05em"
-                  }}
-                >
+                <div className="ticket-title">
                   BRUCIA
                   <br />
                   MOI
                 </div>
 
-                <p className="small">
-                  TICKET{" "}
-                  {index + 1}/
-                  {data.tickets.length}
+                <p className="ticket-meta">
+                  TICKET {index + 1}/{data.tickets.length}
                 </p>
 
-                <div
-                  style={{
-                    background: "white",
-                    padding: "16px",
-                    borderRadius: "18px",
-                    width: "fit-content",
-                    margin:
-                      "28px auto"
-                  }}
-                >
+                <div className="qr-frame">
                   <QRCodeCanvas
                     value={verifyUrl}
                     size={210}
@@ -195,13 +177,7 @@ export default function SuccessPage() {
                   />
                 </div>
 
-                <div
-                  style={{
-                    textAlign: "center",
-                    fontSize: "22px",
-                    fontWeight: 900
-                  }}
-                >
+                <div className="ticket-name">
                   {ticket.nome}{" "}
                   {ticket.cognome}
                 </div>
