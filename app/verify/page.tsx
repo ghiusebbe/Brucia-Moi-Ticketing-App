@@ -4,9 +4,9 @@ import { useEffect } from "react";
 
 export default function VerifyPage() {
   useEffect(() => {
-    const query = window.location.search;
-
-    window.location.replace(`/scan${query}`);
+    window.location.replace(
+      `/scan${window.location.search}`
+    );
   }, []);
 
   return (
@@ -18,7 +18,7 @@ export default function VerifyPage() {
       </div>
 
       <p className="subtitle">
-        Apertura verifica biglietto...
+        Apertura scanner...
       </p>
     </main>
   );

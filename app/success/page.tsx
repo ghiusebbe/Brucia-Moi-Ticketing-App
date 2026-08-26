@@ -1,85 +1,98 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import html2canvas from "html2canvas";
 
-type Person = {
-  nome: string;
-  cognome: string;
-};
-
 type Ticket = {
   id: string;
-  amount: number;
-  currency: string;
-  people: Person[];
+  nome: string;
+  cognome: string;
+  qr_token: string;
+  checked_in: boolean;
+  checked_in_at: string | null;
+};
+
+type Data = {
+  order: {
+    id: string;
+    stripe_session_id: string;
+    amount: number;
+  };
+
+  tickets: Ticket[];
 };
 
 export default function SuccessPage() {
-  const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [error, setError] = useState("");
-  const [downloading, setDownloading] = useState(false);
+  const [data, setData] =
+    useState<Data | null>(null);
 
-  const ticketRef = useRef<HTMLDivElement>(null);
+  const [error, setError] =
+    useState("");
 
   useEffect(() => {
-    const sessionId = new URLSearchParams(
-      window.location.search
-    ).get("session_id");
+    const sessionId =
+      new URLSearchParams(
+        window.location.search
+      ).get("session_id");
 
     if (!sessionId) {
-      setError("Sessione di pagamento mancante.");
+      setError("Sessione mancante.");
       return;
     }
 
-    async function loadTicket() {
-      try {
-        const response = await fetch(
-          `/api/session?session_id=${encodeURIComponent(sessionId!)}`
-        );
+    async function load() {
+      const response = await fetch(
+        `/api/session?session_id=${encodeURIComponent(
+          sessionId!
+        )}`
+      );
 
-        const data = await response.json();
+      const result = await response.json();
 
-        if (!response.ok) {
-          throw new Error(data.error || "Biglietto non disponibile.");
-        }
-
-        setTicket(data);
-      } catch (err) {
+      if (!response.ok) {
         setError(
-          err instanceof Error
-            ? err.message
-            : "Errore nel caricamento del biglietto."
+          result.error ||
+            "Impossibile generare i biglietti."
         );
+
+        return;
       }
+
+      setData(result);
     }
 
-    loadTicket();
+    load();
   }, []);
 
-  async function downloadTicket() {
-    if (!ticketRef.current || !ticket) return;
+  async function download(
+    ticket: Ticket
+  ) {
+    const element =
+      document.getElementById(
+        `ticket-${ticket.id}`
+      );
 
-    setDownloading(true);
+    if (!element) return;
 
-    try {
-      const canvas = await html2canvas(ticketRef.current, {
+    const canvas = await html2canvas(
+      element,
+      {
         scale: 3,
-        backgroundColor: "#0b0b0b"
-      });
+        backgroundColor: "#111111"
+      }
+    );
 
-      const link = document.createElement("a");
+    const link =
+      document.createElement("a");
 
-      link.download =
-        `brucia-moi-${ticket.id.slice(-8)}.png`;
+    link.download =
+      `brucia-moi-${ticket.nome}-${ticket.cognome}.png`;
 
-      link.href = canvas.toDataURL("image/png");
+    link.href =
+      canvas.toDataURL("image/png");
 
-      link.click();
-    } finally {
-      setDownloading(false);
-    }
+    link.click();
   }
 
   if (error) {
@@ -98,7 +111,7 @@ export default function SuccessPage() {
     );
   }
 
-  if (!ticket) {
+  if (!data) {
     return (
       <main>
         <div className="logo">
@@ -108,14 +121,11 @@ export default function SuccessPage() {
         </div>
 
         <p className="subtitle">
-          Generazione del biglietto...
+          Generazione dei biglietti...
         </p>
       </main>
     );
   }
-
-  const verificationUrl =
-    `${window.location.origin}/verify?session_id=${encodeURIComponent(ticket.id)}`;
 
   return (
     <main>
@@ -126,158 +136,102 @@ export default function SuccessPage() {
       </div>
 
       <p className="subtitle">
-        Pagamento completato. Conserva questo biglietto.
+        {data.tickets.length} biglietti
+        generati. Ogni partecipante ha
+        il proprio QR.
       </p>
 
-      <div
-        ref={ticketRef}
-        style={{
-          background: "#111",
-          border: "1px solid #333",
-          borderRadius: "24px",
-          padding: "28px",
-          overflow: "hidden"
-        }}
-      >
-        <div
-          style={{
-            fontSize: "38px",
-            lineHeight: ".9",
-            fontWeight: 900,
-            letterSpacing: "-0.05em"
-          }}
-        >
-          BRUCIA
-          <br />
-          MOI
-        </div>
+      {data.tickets.map(
+        (ticket, index) => {
 
-        <p
-          style={{
-            marginTop: "28px",
-            color: "#999",
-            fontSize: "13px",
-            letterSpacing: ".15em"
-          }}
-        >
-          ADMIT ONE / TICKET
-        </p>
+          const verifyUrl =
+            `${window.location.origin}` +
+            `/verify?token=${ticket.qr_token}`;
 
-        <div
-          style={{
-            background: "white",
-            padding: "18px",
-            borderRadius: "18px",
-            width: "fit-content",
-            margin: "28px auto"
-          }}
-        >
-          <QRCodeCanvas
-            value={verificationUrl}
-            size={210}
-            level="H"
-            includeMargin={false}
-          />
-        </div>
-
-        <div
-          style={{
-            textAlign: "center",
-            fontWeight: 800,
-            marginBottom: "26px"
-          }}
-        >
-          {ticket.people.length}{" "}
-          {ticket.people.length === 1
-            ? "INGRESSO"
-            : "INGRESSI"}
-        </div>
-
-        <div
-          style={{
-            borderTop: "1px solid #333"
-          }}
-        >
-          {ticket.people.map((person, index) => (
+          return (
             <div
-              key={index}
+              key={ticket.id}
               style={{
-                padding: "14px 0",
-                borderBottom: "1px solid #292929",
-                fontSize: "17px",
-                fontWeight: 700
+                marginBottom: "38px"
               }}
             >
-              {person.nome} {person.cognome}
+              <div
+                id={`ticket-${ticket.id}`}
+                className="card"
+              >
+                <div
+                  style={{
+                    fontSize: "34px",
+                    lineHeight: ".9",
+                    fontWeight: 900,
+                    letterSpacing: "-0.05em"
+                  }}
+                >
+                  BRUCIA
+                  <br />
+                  MOI
+                </div>
+
+                <p className="small">
+                  TICKET{" "}
+                  {index + 1}/
+                  {data.tickets.length}
+                </p>
+
+                <div
+                  style={{
+                    background: "white",
+                    padding: "16px",
+                    borderRadius: "18px",
+                    width: "fit-content",
+                    margin:
+                      "28px auto"
+                  }}
+                >
+                  <QRCodeCanvas
+                    value={verifyUrl}
+                    size={210}
+                    level="H"
+                  />
+                </div>
+
+                <div
+                  style={{
+                    textAlign: "center",
+                    fontSize: "22px",
+                    fontWeight: 900
+                  }}
+                >
+                  {ticket.nome}{" "}
+                  {ticket.cognome}
+                </div>
+
+                <p
+                  className="small"
+                  style={{
+                    textAlign: "center"
+                  }}
+                >
+                  QR INDIVIDUALE
+                </p>
+              </div>
+
+              <button
+                className="pay"
+                style={{
+                  marginTop: "10px"
+                }}
+                onClick={() =>
+                  download(ticket)
+                }
+              >
+                ↓ Scarica biglietto di{" "}
+                {ticket.nome}
+              </button>
             </div>
-          ))}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginTop: "24px",
-            gap: "12px"
-          }}
-        >
-          <div>
-            <div
-              style={{
-                color: "#777",
-                fontSize: "11px"
-              }}
-            >
-              ORDER
-            </div>
-
-            <div
-              style={{
-                fontFamily: "monospace",
-                fontSize: "12px"
-              }}
-            >
-              {ticket.id.slice(-12).toUpperCase()}
-            </div>
-          </div>
-
-          <div style={{ textAlign: "right" }}>
-            <div
-              style={{
-                color: "#777",
-                fontSize: "11px"
-              }}
-            >
-              TOTAL
-            </div>
-
-            <strong>
-              {(ticket.amount / 100).toFixed(2)} €
-            </strong>
-          </div>
-        </div>
-      </div>
-
-      <button
-        className="pay"
-        style={{ marginTop: "18px" }}
-        onClick={downloadTicket}
-        disabled={downloading}
-      >
-        {downloading
-          ? "Preparazione..."
-          : "↓ Scarica biglietto"}
-      </button>
-
-      <p
-        className="small"
-        style={{
-          textAlign: "center",
-          marginTop: "14px"
-        }}
-      >
-        Mostra il QR all'ingresso.
-      </p>
+          );
+        }
+      )}
     </main>
   );
 }

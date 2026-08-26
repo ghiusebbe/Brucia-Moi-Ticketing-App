@@ -1,41 +1,11 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 function authorized(request: Request) {
   return (
     request.headers.get("x-staff-password") ===
     process.env.STAFF_PASSWORD
   );
-}
-
-async function getTicket(sessionId: string) {
-  const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-  if (session.payment_status !== "paid") {
-    throw new Error("PAYMENT_NOT_VALID");
-  }
-
-  const count = Number(session.metadata?.people_count || 0);
-
-  const people = [];
-
-  for (let i = 0; i < count; i++) {
-    const raw = session.metadata?.[`person_${i}`];
-
-    if (raw) {
-      try {
-        people.push(JSON.parse(raw));
-      } catch {}
-    }
-  }
-
-  return {
-    session,
-    people
-  };
 }
 
 export async function GET(request: Request) {
@@ -47,40 +17,76 @@ export async function GET(request: Request) {
   }
 
   try {
-    const sessionId =
-      new URL(request.url).searchParams.get("session_id");
+    const token =
+      new URL(request.url).searchParams.get("token");
 
-    if (!sessionId) {
+    if (!token) {
       return NextResponse.json(
-        { error: "Biglietto mancante." },
+        { error: "QR non valido." },
         { status: 400 }
       );
     }
 
-    const { session, people } = await getTicket(sessionId);
-
     const supabase = getSupabaseAdmin();
 
-    const { data: checkin } = await supabase
-      .from("checkins")
-      .select("checked_in_at")
-      .eq("stripe_session_id", sessionId)
+    const { data: ticket, error } = await supabase
+      .from("tickets")
+      .select(`
+        id,
+        nome,
+        cognome,
+        qr_token,
+        checked_in,
+        checked_in_at,
+        orders (
+          id,
+          stripe_session_id,
+          amount_cents,
+          payment_status
+        )
+      `)
+      .eq("qr_token", token)
       .maybeSingle();
+
+    if (error || !ticket) {
+      return NextResponse.json(
+        { error: "Biglietto non trovato." },
+        { status: 404 }
+      );
+    }
+
+    const order: any = ticket.orders;
+
+    if (!order || order.payment_status !== "paid") {
+      return NextResponse.json(
+        { error: "Pagamento non valido." },
+        { status: 403 }
+      );
+    }
 
     return NextResponse.json({
       valid: true,
-      used: Boolean(checkin),
-      checkedInAt: checkin?.checked_in_at || null,
-      people,
-      amount: session.amount_total || 0,
-      order: session.id.slice(-12).toUpperCase()
+
+      ticket: {
+        id: ticket.id,
+        nome: ticket.nome,
+        cognome: ticket.cognome,
+        checkedIn: ticket.checked_in,
+        checkedInAt: ticket.checked_in_at
+      },
+
+      order: {
+        id: order.id,
+        stripeSessionId:
+          order.stripe_session_id
+      }
     });
   } catch (error) {
     console.error(error);
 
     return NextResponse.json(
-      { error: "QR non valido o pagamento non trovato." },
-      { status: 404 }
+      { error: "Errore verifica biglietto." },
+      { status: 500 }
     );
   }
 }
@@ -95,66 +101,72 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const sessionId = String(body.session_id || "");
 
-    if (!sessionId) {
+    const token = String(body.token || "");
+
+    if (!token) {
       return NextResponse.json(
-        { error: "Biglietto mancante." },
+        { error: "Token mancante." },
         { status: 400 }
       );
     }
 
-    await getTicket(sessionId);
-
     const supabase = getSupabaseAdmin();
 
-    const { data: existing } = await supabase
-      .from("checkins")
-      .select("checked_in_at")
-      .eq("stripe_session_id", sessionId)
+    // Update condizionale:
+    // può essere usato solo se checked_in è ancora false.
+    const checkedInAt = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from("tickets")
+      .update({
+        checked_in: true,
+        checked_in_at: checkedInAt
+      })
+      .eq("qr_token", token)
+      .eq("checked_in", false)
+      .select(
+        "id, nome, cognome, checked_in, checked_in_at"
+      )
       .maybeSingle();
 
-    if (existing) {
+    if (error) throw error;
+
+    if (!data) {
+      const { data: existing } = await supabase
+        .from("tickets")
+        .select(
+          "nome, cognome, checked_in, checked_in_at"
+        )
+        .eq("qr_token", token)
+        .maybeSingle();
+
+      if (!existing) {
+        return NextResponse.json(
+          { error: "Biglietto non trovato." },
+          { status: 404 }
+        );
+      }
+
       return NextResponse.json(
         {
           error: "Biglietto già utilizzato.",
-          checkedInAt: existing.checked_in_at
+          checkedInAt:
+            existing.checked_in_at
         },
         { status: 409 }
       );
     }
 
-    const checkedInAt = new Date().toISOString();
-
-    const { error } = await supabase
-      .from("checkins")
-      .insert({
-        stripe_session_id: sessionId,
-        checked_in_at: checkedInAt
-      });
-
-    if (error) {
-      // La UNIQUE evita che due telefoni facciano check-in
-      // contemporaneamente sullo stesso biglietto.
-      if (error.code === "23505") {
-        return NextResponse.json(
-          { error: "Biglietto già utilizzato." },
-          { status: 409 }
-        );
-      }
-
-      throw error;
-    }
-
     return NextResponse.json({
       ok: true,
-      checkedInAt
+      ticket: data
     });
   } catch (error) {
     console.error(error);
 
     return NextResponse.json(
-      { error: "Impossibile effettuare il check-in." },
+      { error: "Check-in non riuscito." },
       { status: 500 }
     );
   }

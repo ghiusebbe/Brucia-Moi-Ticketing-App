@@ -1,160 +1,200 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import {
+  useRef,
+  useState
+} from "react";
 
-type Person = {
-  nome: string;
-  cognome: string;
-};
+import {
+  Html5Qrcode
+} from "html5-qrcode";
 
-type Ticket = {
+type TicketData = {
   valid: boolean;
-  used: boolean;
-  checkedInAt: string | null;
-  people: Person[];
-  amount: number;
-  order: string;
+
+  ticket: {
+    id: string;
+    nome: string;
+    cognome: string;
+    checkedIn: boolean;
+    checkedInAt: string | null;
+  };
 };
 
 export default function ScanPage() {
-  const [password, setPassword] = useState("");
-  const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [sessionId, setSessionId] = useState("");
-  const [message, setMessage] = useState("");
-  const [scanning, setScanning] = useState(false);
+  const [password, setPassword] =
+    useState("");
 
-  const scanner = useRef<Html5Qrcode | null>(null);
+  const [token, setToken] =
+    useState("");
 
-  async function verify(id: string) {
-    setMessage("");
-    setTicket(null);
+  const [data, setData] =
+    useState<TicketData | null>(null);
 
-    const response = await fetch(
-      `/api/checkin?session_id=${encodeURIComponent(id)}`,
-      {
-        headers: {
-          "x-staff-password": password
-        }
-      }
-    );
+  const [message, setMessage] =
+    useState("");
 
-    const data = await response.json();
+  const [scanning, setScanning] =
+    useState(false);
 
-    if (!response.ok) {
-      setMessage(data.error || "Biglietto non valido.");
-      return;
-    }
+  const scanner =
+    useRef<Html5Qrcode | null>(null);
 
-    setSessionId(id);
-    setTicket(data);
-  }
-
-  function parseQr(value: string) {
+  function extractToken(
+    value: string
+  ) {
     try {
       const url = new URL(value);
 
-      const id = url.searchParams.get("session_id");
-
-      return id || value;
+      return (
+        url.searchParams.get("token") ||
+        value
+      );
     } catch {
       return value;
     }
   }
 
-  async function startScanner() {
-    if (!password) {
-      setMessage("Inserisci prima la password staff.");
+  async function verify(
+    qrToken: string
+  ) {
+    const response = await fetch(
+      `/api/checkin?token=${encodeURIComponent(
+        qrToken
+      )}`,
+      {
+        headers: {
+          "x-staff-password":
+            password
+        }
+      }
+    );
+
+    const result =
+      await response.json();
+
+    if (!response.ok) {
+      setData(null);
+
+      setMessage(
+        result.error ||
+          "Biglietto non valido."
+      );
+
       return;
     }
 
+    setToken(qrToken);
+    setData(result);
     setMessage("");
-    setTicket(null);
+  }
 
-    const instance = new Html5Qrcode("reader");
+  async function startScanner() {
+    if (!password) {
+      setMessage(
+        "Inserisci la password staff."
+      );
 
-    scanner.current = instance;
+      return;
+    }
+
+    setData(null);
+    setMessage("");
+
+    const instance =
+      new Html5Qrcode("reader");
+
+    scanner.current =
+      instance;
 
     try {
       await instance.start(
-        { facingMode: "environment" },
+        {
+          facingMode:
+            "environment"
+        },
+
         {
           fps: 10,
+
           qrbox: {
             width: 240,
             height: 240
           }
         },
-        async (decodedText) => {
-          const id = parseQr(decodedText);
+
+        async (
+          decodedText
+        ) => {
+          const qrToken =
+            extractToken(
+              decodedText
+            );
 
           await instance.stop();
 
           setScanning(false);
 
-          await verify(id);
+          await verify(qrToken);
         },
+
         () => {}
       );
 
       setScanning(true);
-    } catch (error) {
-      console.error(error);
-
+    } catch {
       setMessage(
-        "Impossibile aprire la fotocamera. Controlla i permessi."
+        "Impossibile aprire la fotocamera."
       );
     }
   }
 
   async function checkIn() {
-    if (!sessionId) return;
+    const response =
+      await fetch(
+        "/api/checkin",
+        {
+          method: "POST",
 
-    const response = await fetch("/api/checkin", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-staff-password": password
-      },
-      body: JSON.stringify({
-        session_id: sessionId
-      })
-    });
+          headers: {
+            "Content-Type":
+              "application/json",
 
-    const data = await response.json();
+            "x-staff-password":
+              password
+          },
+
+          body:
+            JSON.stringify({
+              token
+            })
+        }
+      );
+
+    const result =
+      await response.json();
 
     if (!response.ok) {
-      setMessage(data.error || "Errore check-in");
+      setMessage(
+        result.error ||
+          "Errore check-in."
+      );
 
-      await verify(sessionId);
+      await verify(token);
 
       return;
     }
 
-    await verify(sessionId);
+    await verify(token);
   }
 
-  async function scanAnother() {
-    setTicket(null);
-    setSessionId("");
+  async function another() {
+    setData(null);
+    setToken("");
     setMessage("");
 
     await startScanner();
   }
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-
-    const id = params.get("session_id");
-
-    if (id) {
-      setSessionId(id);
-    }
-
-    return () => {
-      scanner.current?.stop().catch(() => {});
-    };
-  }, []);
 
   return (
     <main>
@@ -165,7 +205,7 @@ export default function ScanPage() {
       </div>
 
       <p className="subtitle">
-        Scanner staff Brucia Moi
+        Brucia Moi Staff
       </p>
 
       <div className="card">
@@ -173,14 +213,24 @@ export default function ScanPage() {
           type="password"
           placeholder="Password staff"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) =>
+            setPassword(
+              e.target.value
+            )
+          }
         />
 
         <button
           className="pay"
-          style={{ marginTop: "12px" }}
-          onClick={startScanner}
-          disabled={scanning}
+          style={{
+            marginTop: "12px"
+          }}
+          onClick={
+            startScanner
+          }
+          disabled={
+            scanning
+          }
         >
           {scanning
             ? "Scanner attivo..."
@@ -193,8 +243,8 @@ export default function ScanPage() {
         style={{
           width: "100%",
           marginTop: "18px",
-          overflow: "hidden",
-          borderRadius: "18px"
+          borderRadius: "18px",
+          overflow: "hidden"
         }}
       />
 
@@ -206,88 +256,88 @@ export default function ScanPage() {
             color: "#ff9999"
           }}
         >
-          <strong>{message}</strong>
+          {message}
         </div>
       )}
 
-      {ticket && (
+      {data && (
         <div
           className="card"
-          style={{ marginTop: "18px" }}
+          style={{
+            marginTop: "18px"
+          }}
         >
-          {ticket.used ? (
+          {data.ticket
+            .checkedIn ? (
             <>
               <div
                 style={{
-                  fontSize: "32px",
-                  fontWeight: 900,
-                  color: "#ff8f8f"
+                  color:
+                    "#ff8888",
+                  fontSize:
+                    "30px",
+                  fontWeight:
+                    900
                 }}
               >
-                ✕ GIÀ UTILIZZATO
+                ✕ GIÀ
+                UTILIZZATO
               </div>
 
-              {ticket.checkedInAt && (
-                <p className="small">
-                  Check-in:{" "}
-                  {new Date(
-                    ticket.checkedInAt
-                  ).toLocaleString("it-IT")}
-                </p>
-              )}
+              <p className="small">
+                {data.ticket
+                  .checkedInAt
+                  ? new Date(
+                      data.ticket
+                        .checkedInAt
+                    ).toLocaleString(
+                      "it-IT"
+                    )
+                  : ""}
+              </p>
             </>
           ) : (
             <div
               style={{
-                fontSize: "32px",
-                fontWeight: 900,
-                color: "#9affae"
+                color:
+                  "#92ffaa",
+                fontSize:
+                  "30px",
+                fontWeight:
+                  900
               }}
             >
               ✓ VALIDO
             </div>
           )}
 
-          <p className="small">
-            ORDINE {ticket.order}
-          </p>
-
           <div
             style={{
-              borderTop: "1px solid #333",
-              marginTop: "18px"
+              margin:
+                "26px 0",
+              fontSize:
+                "25px",
+              fontWeight:
+                900
             }}
           >
-            {ticket.people.map((person, index) => (
-              <div
-                key={index}
-                style={{
-                  padding: "15px 0",
-                  borderBottom: "1px solid #292929",
-                  fontSize: "18px",
-                  fontWeight: 700
-                }}
-              >
-                {person.nome} {person.cognome}
-              </div>
-            ))}
+            {data.ticket.nome}{" "}
+            {
+              data.ticket
+                .cognome
+            }
           </div>
 
-          <p>
-            <strong>
-              {ticket.people.length}{" "}
-              {ticket.people.length === 1
-                ? "ingresso"
-                : "ingressi"}
-            </strong>
-          </p>
-
-          {!ticket.used && (
+          {!data.ticket
+            .checkedIn && (
             <button
               className="pay"
-              onClick={checkIn}
+              onClick={
+                checkIn
+              }
             >
-              ✓ CONFERMA INGRESSO
+              ✓ CONFERMA
+              INGRESSO
             </button>
           )}
 
@@ -295,11 +345,15 @@ export default function ScanPage() {
             className="secondary"
             style={{
               width: "100%",
-              marginTop: "10px"
+              marginTop:
+                "10px"
             }}
-            onClick={scanAnother}
+            onClick={
+              another
+            }
           >
-            Scansiona altro biglietto
+            Scansiona
+            prossimo
           </button>
         </div>
       )}
