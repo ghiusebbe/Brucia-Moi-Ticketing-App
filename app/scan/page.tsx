@@ -43,6 +43,8 @@ export default function ScanPage() {
   const lastScanAt = useRef(0);
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const audioContext = useRef<AudioContext | null>(null);
+
   function extractToken(value: string) {
     try {
       const url = new URL(value);
@@ -64,49 +66,81 @@ export default function ScanPage() {
     }, 2600);
   }
 
-  function playSuccessSound() {
+  async function unlockAudio() {
     try {
       const AudioContextClass =
         window.AudioContext ||
         (window as any).webkitAudioContext;
 
-      const ctx = new AudioContextClass();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      if (!audioContext.current) {
+        audioContext.current = new AudioContextClass();
+      }
 
-      osc.type = "sine";
+      if (audioContext.current.state === "suspended") {
+        await audioContext.current.resume();
+      }
 
-      // Doppio ding stile gate / aeroporto
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      osc.frequency.setValueAtTime(1175, ctx.currentTime + 0.13);
+      // Suono praticamente muto per sbloccare l'audio mobile
+      const osc = audioContext.current.createOscillator();
+      const gain = audioContext.current.createGain();
 
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(
-        0.18,
-        ctx.currentTime + 0.01
-      );
-      gain.gain.exponentialRampToValueAtTime(
-        0.0001,
-        ctx.currentTime + 0.11
-      );
-      gain.gain.setValueAtTime(
-        0.0001,
-        ctx.currentTime + 0.13
-      );
-      gain.gain.exponentialRampToValueAtTime(
-        0.16,
-        ctx.currentTime + 0.14
-      );
-      gain.gain.exponentialRampToValueAtTime(
-        0.0001,
-        ctx.currentTime + 0.32
-      );
+      gain.gain.value = 0.00001;
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(audioContext.current.destination);
 
       osc.start();
-      osc.stop(ctx.currentTime + 0.35);
+      osc.stop(audioContext.current.currentTime + 0.02);
+    } catch (error) {
+      console.error("Audio unlock error:", error);
+    }
+  }
+
+  async function playSuccessSound() {
+    try {
+      const ctx = audioContext.current;
+
+      if (!ctx) return;
+
+      if (ctx.state === "suspended") {
+        await ctx.resume();
+      }
+
+      const now = ctx.currentTime;
+
+      // Primo ding
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+
+      osc1.type = "sine";
+      osc1.frequency.value = 880;
+
+      gain1.gain.setValueAtTime(0.0001, now);
+      gain1.gain.exponentialRampToValueAtTime(0.28, now + 0.01);
+      gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+
+      osc1.start(now);
+      osc1.stop(now + 0.18);
+
+      // Secondo ding più alto
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+
+      osc2.type = "sine";
+      osc2.frequency.value = 1175;
+
+      gain2.gain.setValueAtTime(0.0001, now + 0.17);
+      gain2.gain.exponentialRampToValueAtTime(0.25, now + 0.18);
+      gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+
+      osc2.start(now + 0.17);
+      osc2.stop(now + 0.4);
     } catch (error) {
       console.error("Audio error:", error);
     }
@@ -198,6 +232,8 @@ export default function ScanPage() {
 
       return;
     }
+
+    await unlockAudio();
 
     if (scanner.current) {
       return;
