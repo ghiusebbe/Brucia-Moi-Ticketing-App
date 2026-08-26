@@ -15,30 +15,35 @@ export async function POST(request: Request) {
       );
     }
 
-    for (const person of people) {
-      if (
-        !person.nome ||
-        !person.cognome ||
-        typeof person.nome !== "string" ||
-        typeof person.cognome !== "string"
-      ) {
-        return NextResponse.json(
-          { error: "Nome e cognome sono obbligatori." },
-          { status: 400 }
-        );
-      }
+    const cleanPeople = people.map((person) => ({
+      nome: String(person.nome || "").trim().slice(0, 60),
+      cognome: String(person.cognome || "").trim().slice(0, 60)
+    }));
+
+    if (cleanPeople.some((p) => !p.nome || !p.cognome)) {
+      return NextResponse.json(
+        { error: "Nome e cognome sono obbligatori." },
+        { status: 400 }
+      );
     }
 
     const price = Number(process.env.TICKET_PRICE_CENTS || 1500);
-
     const origin = new URL(request.url).origin;
+
+    const metadata: Record<string, string> = {
+      people_count: String(cleanPeople.length)
+    };
+
+    cleanPeople.forEach((person, index) => {
+      metadata[`person_${index}`] = JSON.stringify(person);
+    });
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
 
       line_items: [
         {
-          quantity: people.length,
+          quantity: cleanPeople.length,
           price_data: {
             currency: "eur",
             unit_amount: price,
@@ -48,6 +53,8 @@ export async function POST(request: Request) {
           }
         }
       ],
+
+      metadata,
 
       success_url:
         `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
