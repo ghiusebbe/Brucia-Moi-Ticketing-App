@@ -61,7 +61,7 @@ export default function ScanPage() {
 
     bannerTimer.current = setTimeout(() => {
       setBanner(null);
-    }, 2500);
+    }, 4500);
   }
 
   async function unlockAudio() {
@@ -574,7 +574,7 @@ export default function ScanPage() {
             {banner.title}
           </div>
 
-          <div className="scan-banner-subtitle">
+          <div className="scan-banner-name">
             {banner.subtitle}
           </div>
         </div>
