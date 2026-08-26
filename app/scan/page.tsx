@@ -64,6 +64,54 @@ export default function ScanPage() {
     }, 2600);
   }
 
+  function playSuccessSound() {
+    try {
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as any).webkitAudioContext;
+
+      const ctx = new AudioContextClass();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "sine";
+
+      // Doppio ding stile gate / aeroporto
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(1175, ctx.currentTime + 0.13);
+
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(
+        0.18,
+        ctx.currentTime + 0.01
+      );
+      gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        ctx.currentTime + 0.11
+      );
+      gain.gain.setValueAtTime(
+        0.0001,
+        ctx.currentTime + 0.13
+      );
+      gain.gain.exponentialRampToValueAtTime(
+        0.16,
+        ctx.currentTime + 0.14
+      );
+      gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        ctx.currentTime + 0.32
+      );
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch (error) {
+      console.error("Audio error:", error);
+    }
+  }
+
   async function verifyAndCheckIn(token: string) {
     const verifyResponse = await fetch(
       `/api/checkin?token=${encodeURIComponent(token)}`,
@@ -130,6 +178,8 @@ export default function ScanPage() {
 
       return;
     }
+
+    playSuccessSound();
 
     showBanner({
       type: "valid",
