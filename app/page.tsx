@@ -16,6 +16,7 @@ export default function Home() {
 
   const [loading, setLoading] = useState(false);
   const [errore, setErrore] = useState("");
+  const [email, setEmail] = useState("");
 
   function aggiorna(
     index: number,
@@ -68,6 +69,18 @@ export default function Home() {
       return;
     }
 
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (
+      !cleanEmail ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)
+    ) {
+      setErrore(
+        "Inserisci un indirizzo email valido."
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -77,7 +90,8 @@ export default function Home() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          people: clean
+          people: clean,
+          email: cleanEmail
         })
       });
 
@@ -157,6 +171,29 @@ export default function Home() {
         >
           + Aggiungi persona
         </button>
+
+        <div className="checkout-email">
+          <label htmlFor="ticket-email">
+            Email per i biglietti
+          </label>
+
+          <input
+            id="ticket-email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            placeholder="nome@email.it"
+            value={email}
+            onChange={(e) =>
+              setEmail(e.target.value)
+            }
+          />
+
+          <p className="small">
+            Dopo il pagamento potrai inviare tutti i biglietti
+            a questo indirizzo con un solo tocco.
+          </p>
+        </div>
 
         <div className="total">
           <div>

@@ -7,10 +7,23 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const people = body.people;
+    const email = String(body.email || "")
+      .trim()
+      .toLowerCase();
 
     if (!Array.isArray(people) || people.length < 1 || people.length > 20) {
       return NextResponse.json(
         { error: "Numero di partecipanti non valido." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !email ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ) {
+      return NextResponse.json(
+        { error: "Email non valida." },
         { status: 400 }
       );
     }
@@ -31,7 +44,8 @@ export async function POST(request: Request) {
     const origin = new URL(request.url).origin;
 
     const metadata: Record<string, string> = {
-      people_count: String(cleanPeople.length)
+      people_count: String(cleanPeople.length),
+      ticket_email: email
     };
 
     cleanPeople.forEach((person, index) => {
@@ -40,6 +54,7 @@ export async function POST(request: Request) {
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
+      customer_email: email,
 
       line_items: [
         {

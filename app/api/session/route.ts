@@ -45,10 +45,14 @@ export async function GET(request: Request) {
           .insert({
             stripe_session_id: session.id,
             amount_cents: session.amount_total || 0,
-            payment_status: "paid"
+            payment_status: "paid",
+            email:
+              session.metadata?.ticket_email ||
+              session.customer_details?.email ||
+              null
           })
           .select(
-            "id, stripe_session_id, amount_cents"
+            "id, stripe_session_id, amount_cents, email"
           )
           .single();
 
@@ -58,7 +62,7 @@ export async function GET(request: Request) {
         const { data: existingOrder } = await supabase
           .from("orders")
           .select(
-            "id, stripe_session_id, amount_cents"
+            "id, stripe_session_id, amount_cents, email"
           )
           .eq("stripe_session_id", session.id)
           .maybeSingle();
@@ -124,7 +128,12 @@ export async function GET(request: Request) {
       order: {
         id: order.id,
         stripe_session_id: order.stripe_session_id,
-        amount: order.amount_cents
+        amount: order.amount_cents,
+        email:
+          order.email ||
+          session.metadata?.ticket_email ||
+          session.customer_details?.email ||
+          ""
       },
 
       tickets: tickets || []

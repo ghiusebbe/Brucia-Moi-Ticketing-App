@@ -18,6 +18,7 @@ type Data = {
     id: string;
     stripe_session_id: string;
     amount: number;
+    email: string;
   };
 
   tickets: Ticket[];
@@ -28,6 +29,15 @@ export default function SuccessPage() {
     useState<Data | null>(null);
 
   const [error, setError] =
+    useState("");
+
+  const [sendingEmail, setSendingEmail] =
+    useState(false);
+
+  const [emailSent, setEmailSent] =
+    useState(false);
+
+  const [emailError, setEmailError] =
     useState("");
 
   useEffect(() => {
@@ -64,6 +74,47 @@ export default function SuccessPage() {
 
     load();
   }, []);
+
+  async function sendTicketsByEmail() {
+    if (!data) return;
+
+    setSendingEmail(true);
+    setEmailError("");
+
+    try {
+      const response = await fetch(
+        "/api/tickets/email",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            orderId: data.order.id
+          })
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ||
+          "Invio email non riuscito."
+        );
+      }
+
+      setEmailSent(true);
+    } catch (error) {
+      setEmailError(
+        error instanceof Error
+          ? error.message
+          : "Invio email non riuscito."
+      );
+    } finally {
+      setSendingEmail(false);
+    }
+  }
 
   async function download(
     ticket: Ticket
@@ -140,6 +191,47 @@ export default function SuccessPage() {
         generati. Ogni partecipante ha
         il proprio QR.
       </p>
+
+      <section className="email-ticket-panel">
+        <div className="email-ticket-icon">
+          ✉
+        </div>
+
+        <div className="email-ticket-copy">
+          <strong>
+            Ricevi tutti i biglietti via email
+          </strong>
+
+          <span>
+            {data.order.email}
+          </span>
+        </div>
+
+        <button
+          className={
+            emailSent
+              ? "email-ticket-button sent"
+              : "email-ticket-button"
+          }
+          onClick={sendTicketsByEmail}
+          disabled={
+            sendingEmail ||
+            emailSent
+          }
+        >
+          {emailSent
+            ? "✓ Inviati"
+            : sendingEmail
+            ? "Invio..."
+            : "Invia"}
+        </button>
+      </section>
+
+      {emailError && (
+        <p className="email-ticket-error">
+          {emailError}
+        </p>
+      )}
 
       {data.tickets.map(
         (ticket, index) => {
