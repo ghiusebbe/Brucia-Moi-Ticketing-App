@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 
 type TicketData = {
@@ -16,17 +16,7 @@ type TicketData = {
 
 type BannerState =
   | {
-      type: "valid";
-      title: string;
-      subtitle: string;
-    }
-  | {
-      type: "used";
-      title: string;
-      subtitle: string;
-    }
-  | {
-      type: "error";
+      type: "valid" | "used" | "error";
       title: string;
       subtitle: string;
     }
@@ -39,16 +29,24 @@ export default function ScanPage() {
 
   const scanner = useRef<Html5Qrcode | null>(null);
   const processing = useRef(false);
+
   const lastToken = useRef("");
   const lastScanAt = useRef(0);
-  const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const audioContext = useRef<AudioContext | null>(null);
+  const bannerTimer =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const audioContext =
+    useRef<AudioContext | null>(null);
 
   function extractToken(value: string) {
     try {
       const url = new URL(value);
-      return url.searchParams.get("token") || value;
+
+      return (
+        url.searchParams.get("token") ||
+        value
+      );
     } catch {
       return value;
     }
@@ -63,7 +61,7 @@ export default function ScanPage() {
 
     bannerTimer.current = setTimeout(() => {
       setBanner(null);
-    }, 2600);
+    }, 2500);
   }
 
   async function unlockAudio() {
@@ -72,27 +70,24 @@ export default function ScanPage() {
         window.AudioContext ||
         (window as any).webkitAudioContext;
 
+      if (!AudioContextClass) return;
+
       if (!audioContext.current) {
-        audioContext.current = new AudioContextClass();
+        audioContext.current =
+          new AudioContextClass();
       }
 
-      if (audioContext.current.state === "suspended") {
+      if (
+        audioContext.current.state ===
+        "suspended"
+      ) {
         await audioContext.current.resume();
       }
-
-      // Suono praticamente muto per sbloccare l'audio mobile
-      const osc = audioContext.current.createOscillator();
-      const gain = audioContext.current.createGain();
-
-      gain.gain.value = 0.00001;
-
-      osc.connect(gain);
-      gain.connect(audioContext.current.destination);
-
-      osc.start();
-      osc.stop(audioContext.current.currentTime + 0.02);
     } catch (error) {
-      console.error("Audio unlock error:", error);
+      console.error(
+        "Audio unlock error",
+        error
+      );
     }
   }
 
@@ -108,41 +103,60 @@ export default function ScanPage() {
 
       const now = ctx.currentTime;
 
-      // Primo ding
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
+      const tones = [
+        {
+          frequency: 880,
+          start: 0
+        },
+        {
+          frequency: 1175,
+          start: 0.16
+        }
+      ];
 
-      osc1.type = "sine";
-      osc1.frequency.value = 880;
+      tones.forEach(
+        ({ frequency, start }) => {
+          const osc =
+            ctx.createOscillator();
 
-      gain1.gain.setValueAtTime(0.0001, now);
-      gain1.gain.exponentialRampToValueAtTime(0.28, now + 0.01);
-      gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+          const gain =
+            ctx.createGain();
 
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
+          osc.type = "sine";
+          osc.frequency.value =
+            frequency;
 
-      osc1.start(now);
-      osc1.stop(now + 0.18);
+          gain.gain.setValueAtTime(
+            0.0001,
+            now + start
+          );
 
-      // Secondo ding più alto
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
+          gain.gain.exponentialRampToValueAtTime(
+            0.25,
+            now + start + 0.015
+          );
 
-      osc2.type = "sine";
-      osc2.frequency.value = 1175;
+          gain.gain.exponentialRampToValueAtTime(
+            0.0001,
+            now + start + 0.18
+          );
 
-      gain2.gain.setValueAtTime(0.0001, now + 0.17);
-      gain2.gain.exponentialRampToValueAtTime(0.25, now + 0.18);
-      gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+          osc.connect(gain);
+          gain.connect(
+            ctx.destination
+          );
 
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-
-      osc2.start(now + 0.17);
-      osc2.stop(now + 0.4);
+          osc.start(now + start);
+          osc.stop(
+            now + start + 0.2
+          );
+        }
+      );
     } catch (error) {
-      console.error("Audio error:", error);
+      console.error(
+        "Success sound error",
+        error
+      );
     }
   }
 
@@ -158,216 +172,333 @@ export default function ScanPage() {
 
       const now = ctx.currentTime;
 
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
+      const tones = [
+        {
+          frequency: 320,
+          start: 0
+        },
+        {
+          frequency: 240,
+          start: 0.18
+        }
+      ];
 
-      osc1.type = "square";
-      osc1.frequency.value = 330;
+      tones.forEach(
+        ({ frequency, start }) => {
+          const osc =
+            ctx.createOscillator();
 
-      gain1.gain.setValueAtTime(0.0001, now);
-      gain1.gain.exponentialRampToValueAtTime(0.18, now + 0.01);
-      gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+          const gain =
+            ctx.createGain();
 
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
+          osc.type = "square";
+          osc.frequency.value =
+            frequency;
 
-      osc1.start(now);
-      osc1.stop(now + 0.18);
+          gain.gain.setValueAtTime(
+            0.0001,
+            now + start
+          );
 
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
+          gain.gain.exponentialRampToValueAtTime(
+            0.12,
+            now + start + 0.01
+          );
 
-      osc2.type = "square";
-      osc2.frequency.value = 260;
+          gain.gain.exponentialRampToValueAtTime(
+            0.0001,
+            now + start + 0.16
+          );
 
-      gain2.gain.setValueAtTime(0.0001, now + 0.18);
-      gain2.gain.exponentialRampToValueAtTime(0.18, now + 0.19);
-      gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+          osc.connect(gain);
+          gain.connect(
+            ctx.destination
+          );
 
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-
-      osc2.start(now + 0.18);
-      osc2.stop(now + 0.4);
+          osc.start(now + start);
+          osc.stop(
+            now + start + 0.18
+          );
+        }
+      );
     } catch (error) {
-      console.error("Used ticket audio error:", error);
+      console.error(
+        "Used sound error",
+        error
+      );
     }
   }
 
-  async function verifyAndCheckIn(token: string) {
-    const verifyResponse = await fetch(
-      `/api/checkin?token=${encodeURIComponent(token)}`,
-      {
-        headers: {
-          "x-staff-password": password
-        }
-      }
-    );
+  async function verifyAndCheckIn(
+    token: string
+  ) {
+    try {
+      const verifyResponse =
+        await fetch(
+          `/api/checkin?token=${encodeURIComponent(
+            token
+          )}`,
+          {
+            headers: {
+              "x-staff-password":
+                password
+            }
+          }
+        );
 
-    const verifyData = await verifyResponse.json();
+      const verifyData =
+        await verifyResponse.json();
 
-    if (!verifyResponse.ok) {
-      showBanner({
-        type: "error",
-        title: "QR NON VALIDO",
-        subtitle: verifyData.error || "Biglietto non trovato"
-      });
-
-      return;
-    }
-
-    const data = verifyData as TicketData;
-
-    if (data.ticket.checkedIn) {
-      await playUsedSound();
-
-      showBanner({
-        type: "used",
-        title: "GIÀ UTILIZZATO",
-        subtitle: `${data.ticket.nome} ${data.ticket.cognome}`
-      });
-
-      return;
-    }
-
-    const checkinResponse = await fetch("/api/checkin", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-staff-password": password
-      },
-      body: JSON.stringify({
-        token
-      })
-    });
-
-    const checkinData = await checkinResponse.json();
-
-    if (!checkinResponse.ok) {
-      if (checkinResponse.status === 409) {
-        await playUsedSound();
-
+      if (!verifyResponse.ok) {
         showBanner({
-          type: "used",
-          title: "GIÀ UTILIZZATO",
-          subtitle: `${data.ticket.nome} ${data.ticket.cognome}`
+          type: "error",
+          title: "QR NON VALIDO",
+          subtitle:
+            verifyData.error ||
+            "Biglietto non trovato"
         });
 
         return;
       }
 
+      const data =
+        verifyData as TicketData;
+
+      if (
+        data.ticket.checkedIn
+      ) {
+        await playUsedSound();
+
+        showBanner({
+          type: "used",
+          title: "GIÀ UTILIZZATO",
+          subtitle:
+            `${data.ticket.nome} ${data.ticket.cognome}`
+        });
+
+        return;
+      }
+
+      const checkinResponse =
+        await fetch(
+          "/api/checkin",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              "x-staff-password":
+                password
+            },
+
+            body: JSON.stringify({
+              token
+            })
+          }
+        );
+
+      const checkinData =
+        await checkinResponse.json();
+
+      if (!checkinResponse.ok) {
+        if (
+          checkinResponse.status ===
+          409
+        ) {
+          await playUsedSound();
+
+          showBanner({
+            type: "used",
+            title:
+              "GIÀ UTILIZZATO",
+            subtitle:
+              `${data.ticket.nome} ${data.ticket.cognome}`
+          });
+
+          return;
+        }
+
+        showBanner({
+          type: "error",
+          title:
+            "ERRORE CHECK-IN",
+          subtitle:
+            checkinData.error ||
+            "Riprova"
+        });
+
+        return;
+      }
+
+      await playSuccessSound();
+
+      showBanner({
+        type: "valid",
+        title: "INGRESSO OK",
+        subtitle:
+          `${data.ticket.nome} ${data.ticket.cognome}`
+      });
+    } catch (error) {
+      console.error(error);
+
       showBanner({
         type: "error",
-        title: "ERRORE CHECK-IN",
-        subtitle: checkinData.error || "Riprova"
+        title: "ERRORE",
+        subtitle:
+          "Impossibile controllare il biglietto"
       });
-
-      return;
     }
-
-    playSuccessSound();
-
-    showBanner({
-      type: "valid",
-      title: "INGRESSO OK",
-      subtitle: `${data.ticket.nome} ${data.ticket.cognome}`
-    });
   }
 
   async function startScanner() {
-    if (!password) {
+    if (!password.trim()) {
       showBanner({
         type: "error",
         title: "PASSWORD MANCANTE",
-        subtitle: "Inserisci la password staff"
+        subtitle:
+          "Inserisci la password staff"
       });
 
       return;
     }
-
-    await unlockAudio();
 
     if (scanner.current) {
       return;
     }
 
-    const instance = new Html5Qrcode("reader");
+    await unlockAudio();
+
+    const instance =
+      new Html5Qrcode("reader");
+
     scanner.current = instance;
 
     try {
       await instance.start(
         {
-          facingMode: "environment"
+          facingMode:
+            "environment"
         },
+
         {
-          fps: 12,
+          fps: 10,
+
           qrbox: {
             width: 250,
             height: 250
           }
         },
-        async (decodedText) => {
-          const token = extractToken(decodedText);
-          const now = Date.now();
 
-          // Evita letture duplicate dello stesso QR mentre
-          // il telefono è ancora puntato sul codice.
+        async decodedText => {
+          const token =
+            extractToken(
+              decodedText
+            );
+
+          const now =
+            Date.now();
+
           if (
-            token === lastToken.current &&
-            now - lastScanAt.current < 3500
+            token ===
+              lastToken.current &&
+            now -
+              lastScanAt.current <
+              3500
           ) {
             return;
           }
 
-          if (processing.current) {
+          if (
+            processing.current
+          ) {
             return;
           }
 
-          processing.current = true;
-          lastToken.current = token;
-          lastScanAt.current = now;
+          processing.current =
+            true;
+
+          lastToken.current =
+            token;
+
+          lastScanAt.current =
+            now;
 
           try {
-            await verifyAndCheckIn(token);
+            await verifyAndCheckIn(
+              token
+            );
           } finally {
-            // Lo scanner NON viene fermato.
-            // Dopo un breve intervallo può leggere il QR successivo.
             setTimeout(() => {
-              processing.current = false;
-            }, 900);
+              processing.current =
+                false;
+            }, 700);
           }
         },
+
         () => {}
       );
 
       setScanning(true);
     } catch (error) {
-      console.error(error);
+      console.error(
+        "Camera error:",
+        error
+      );
 
       scanner.current = null;
 
       showBanner({
         type: "error",
-        title: "FOTOCAMERA NON DISPONIBILE",
-        subtitle: "Controlla i permessi del browser"
+        title:
+          "FOTOCAMERA NON DISPONIBILE",
+        subtitle:
+          "Controlla i permessi della fotocamera"
       });
     }
   }
 
   async function stopScanner() {
-    if (!scanner.current) return;
+    const current =
+      scanner.current;
+
+    if (!current) return;
 
     try {
-      await scanner.current.stop();
-    } catch {}
+      if (current.isScanning) {
+        await current.stop();
+      }
 
-    try {
-      await scanner.current.clear();
-    } catch {}
-
-    scanner.current = null;
-    setScanning(false);
+      await current.clear();
+    } catch (error) {
+      console.error(
+        "Stop scanner error:",
+        error
+      );
+    } finally {
+      scanner.current = null;
+      setScanning(false);
+    }
   }
+
+  useEffect(() => {
+    return () => {
+      if (bannerTimer.current) {
+        clearTimeout(
+          bannerTimer.current
+        );
+      }
+
+      if (
+        scanner.current?.isScanning
+      ) {
+        scanner.current
+          .stop()
+          .catch(() => {});
+      }
+    };
+  }, []);
 
   return (
     <main>
@@ -387,7 +518,11 @@ export default function ScanPage() {
             type="password"
             placeholder="Password staff"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={e =>
+              setPassword(
+                e.target.value
+              )
+            }
           />
 
           <button
@@ -426,46 +561,20 @@ export default function ScanPage() {
 
       {banner && (
         <div
-          style={{
-            marginTop: "12px",
-            borderRadius: "14px",
-            padding: "12px 14px",
-            border: "1px solid #333",
-            background:
-              banner.type === "valid"
-                ? "#102519"
-                : banner.type === "used"
-                ? "#291919"
-                : "#2b2114"
-          }}
+          className={`scan-banner ${banner.type}`}
         >
-          <div
-            style={{
-              fontSize: "16px",
-              fontWeight: 900,
-              color:
-                banner.type === "valid"
-                  ? "#92ffaa"
-                  : banner.type === "used"
-                  ? "#ff9696"
-                  : "#ffd28a"
-            }}
-          >
+          <div className="scan-banner-title">
             {banner.type === "valid"
               ? "✓ "
-              : banner.type === "used"
+              : banner.type ===
+                "used"
               ? "✕ "
               : "⚠ "}
+
             {banner.title}
           </div>
 
-          <div
-            style={{
-              marginTop: "3px",
-              color: "#bbb",
-              fontSize: "13px"
-            }}
-          >
+          <div className="scan-banner-subtitle">
             {banner.subtitle}
           </div>
         </div>
@@ -479,7 +588,8 @@ export default function ScanPage() {
             marginTop: "12px"
           }}
         >
-          Scanner attivo — inquadra il prossimo QR
+          Scanner attivo —
+          inquadra il prossimo QR
         </p>
       )}
     </main>
