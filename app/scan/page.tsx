@@ -146,6 +146,54 @@ export default function ScanPage() {
     }
   }
 
+  async function playUsedSound() {
+    try {
+      const ctx = audioContext.current;
+
+      if (!ctx) return;
+
+      if (ctx.state === "suspended") {
+        await ctx.resume();
+      }
+
+      const now = ctx.currentTime;
+
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+
+      osc1.type = "square";
+      osc1.frequency.value = 330;
+
+      gain1.gain.setValueAtTime(0.0001, now);
+      gain1.gain.exponentialRampToValueAtTime(0.18, now + 0.01);
+      gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+
+      osc1.start(now);
+      osc1.stop(now + 0.18);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+
+      osc2.type = "square";
+      osc2.frequency.value = 260;
+
+      gain2.gain.setValueAtTime(0.0001, now + 0.18);
+      gain2.gain.exponentialRampToValueAtTime(0.18, now + 0.19);
+      gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+
+      osc2.start(now + 0.18);
+      osc2.stop(now + 0.4);
+    } catch (error) {
+      console.error("Used ticket audio error:", error);
+    }
+  }
+
   async function verifyAndCheckIn(token: string) {
     const verifyResponse = await fetch(
       `/api/checkin?token=${encodeURIComponent(token)}`,
@@ -171,6 +219,8 @@ export default function ScanPage() {
     const data = verifyData as TicketData;
 
     if (data.ticket.checkedIn) {
+      await playUsedSound();
+
       showBanner({
         type: "used",
         title: "GIÀ UTILIZZATO",
@@ -195,6 +245,8 @@ export default function ScanPage() {
 
     if (!checkinResponse.ok) {
       if (checkinResponse.status === 409) {
+        await playUsedSound();
+
         showBanner({
           type: "used",
           title: "GIÀ UTILIZZATO",
