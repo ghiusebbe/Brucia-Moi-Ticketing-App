@@ -2,10 +2,18 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 function authorized(request: Request) {
-  return (
-    request.headers.get("x-admin-password") ===
-    process.env.ADMIN_PASSWORD
-  );
+  const received =
+    request.headers.get("x-admin-password")?.trim();
+
+  const expected =
+    process.env.ADMIN_PASSWORD?.trim();
+
+  if (!expected) {
+    console.error("ADMIN_PASSWORD non configurata su Vercel");
+    return false;
+  }
+
+  return received === expected;
 }
 
 export async function GET(request: Request) {
