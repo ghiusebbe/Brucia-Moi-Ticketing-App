@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     // 2. Recuperiamo eventuale ordine già creato
     let { data: order } = await supabase
       .from("orders")
-      .select("id, stripe_session_id, amount_cents")
+      .select("id, stripe_session_id, amount_cents, email")
       .eq("stripe_session_id", session.id)
       .maybeSingle();
 
